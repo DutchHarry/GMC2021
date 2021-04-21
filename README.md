@@ -13,88 +13,65 @@ $useragent = "somerubbish"
 $url = "https://www.gmc-uk.org/api/gmc/print/doctor?no=$line"
 $a = invoke-webrequest $url -OutFile "$outputdir$line.PDF" -UserAgent "$useragent"
 
+Getting the GMC numbers
+Potentially there are about 5,500,000 valid GMC numbers
+The tange from 0 to 5,000,000 exists of only 500k numbers with an additional checkdigit
+Only the about 500,000 numbers with valid checkdigit were scanned.
+The 5m and 6m ranges were in the past used for other puposes but contain some existing numbers.
+Only 5,500,000 to 5,900,000 and 6,500,000 to 6,900,000 weren't scanned (yet).
+Between 8,020,000 and 9,999,999 none were scanned either.
+
+All other numbers were scanned.
+But surely a few were missed (maybe temprarily offline?)
+
+The result bearly 450k PDFs with GMC details
+
+Transforming to text files
+Tried a few with an Adobe Acrobat kit, with unsatisfactory results.
+Tried with itextsharp (and poweshell) with better results
+But finally went for processing with pdftotext (from xpdfreader)
+
+# options -table and -raw aren't that good, so wh these options and within Poweshlell
+Get-ChildItem "S:\_ue\gmc\R8\*.pdf" | % {
+  $outputname = $_.Basename
+  $output = "S:\_ue\gmc\R2\$outputname.txt"
+  "G:\Portable\xpdf-tools-win-4.03\bin64\pdftotext.exe -nodiag -eol dos -nopgbrk -enc UTF-8 $_ $output " | CMD
+}
+
+# check if all went through:
+$indir = "S:\_ue\gmc\whissues"
+$outdir = "S:\_ue\gmc\txt"
+Get-ChildItem $indir | % {
+  $inname = $_.Basename;
+  $outname = (Get-ChildItem "$outdir\$inname.*").Basename
+  If ($inname -ne $outname) {
+    Write-Host "$inname : MISSING"
+  }
+}
+
+
+# Concatenation of TXT-files:
+$delimiter = "££"
+$indir =  "S:\_ue\gmc\R2\"
+$destfile = "S:\_ue\gmc\gmcall.txt"
+Get-ChildItem $indir -File -Filter *.txt | % {
+	"$delimiter" | Out-File $destfile -Append; 
+	$_.Name | Out-File $destfile -Append; 
+	Get-Content $_.FullName | Out-File $destfile -Append
+}
+
+
+After aal this you can BULK INSERT into a SQL-server (or other) database and take the details apart from there.
+That'll still need some handycrafting, as recognition of text even with pdftotext proved far from perfect.
+
+
 # Re 2.
-$collectedlinksoutput = "c:\temp\gmclinks.txt"
-$outputdir = "c:\temp\youroutdir\"
-Get-ChildItem "$outputdir" | % {
+$collectedoutput = "S:\_ue\gmc\gmclinks.txt"
+$indir = "S:\_ue\gmc\whissues"
+Get-ChildItem "$indir\*.PDF" | % { `
   Add-Content $collectedoutput ( `
-    (Get-Content $_) -match "^/URI \(http*" -notmatch '^*contact-us*' | Select -unique `
+    (Get-Content "$_") -match "^/URI \(http*" -notmatch '^*contact-us*' | Select -unique `
   )
+#  Write-Host "$_"
 }
 
-# Re 3.
-$iTextDllPath = "C:\Program Files\PackageManagement\NuGet\Packages\iTextSharp.5.5.13.2\lib\itextsharp.dll"
-Add-Type -Path $iTextDllPath
-$dllPath = "C:\Program Files\PackageManagement\NuGet\Packages\BouncyCastle.1.8.9\lib\BouncyCastle.Crypto.dll"
-Add-Type -Path $dllPath
-function Import-PDFText {
-    <#
-    .SYNOPSIS
-        Import-PdfText
-        Imports the raw text data of a PDF file as readable text.
-    .DESCRIPTION
-        Takes the path of a PDF file, loads the file in and converts the text into readable
-        string data, before outputting it as a complete string.
-    .EXAMPLE
-        PS C:\> Import-PDFText -Path .\Test.pdf | Set-Content $env:Temp\test.txt
-
-        Returns all of the text in Test.pdf as a string using StringBuilder and stores it to a
-        file in the temp folder.
-    .INPUTS
-        Takes a file path as pipeline input.
-    .OUTPUTS
-        Outputs the entire text content of the PDF file as string.
-    .NOTES
-        Requires the iTextSharp library, which can be downloaded from here:
-        https://sourceforge.net/projects/itextsharp/
-
-        Place the DLL in the same folder as the script, and execute the function.
-    #>
-    [CmdletBinding()]
-    Param(
-        [Parameter(Mandatory, Position = 0, ValueFromPipeline)]
-        [ValidateScript({ Test-Path $_ })]
-        [string]
-        $Path
-    )
-    begin {
-        if (-not ([System.Management.Automation.PSTypeName]'iTextSharp.Text.Pdf.PdfReader').Type) {
-            Add-Type -Path "$PSScriptRoot\itextsharp.dll"
-        }
-    }
-    process {
-        $Reader = New-Object 'iTextSharp.Text.Pdf.PdfReader' -ArgumentList $Path
-        $PdfText = New-Object 'System.Text.StringBuilder'
-
-        for ($Page = 1; $Page -le $Reader.NumberOfPages; $Page++) {
-            $Strategy = New-Object 'iTextSharp.Text.Pdf.Parser.SimpleTextExtractionStrategy'
-            $CurrentText = [iTextSharp.Text.Pdf.Parser.PdfTextExtractor]::GetTextFromPage($Reader, $Page, $Strategy)
-            $PdfText.AppendLine([System.Text.Encoding]::UTF8.GetString([System.Text.ASCIIEncoding]::Convert([System.Text.Encoding]::Default, [System.Text.Encoding]::UTF8, [System.Text.Encoding]::Default.GetBytes($CurrentText))))
-        }
-        $Reader.Close()
-
-        $PdfText.ToString()
-    }
-}
-
-<#
-# Usage:
-$outputfile = "c:\temp\gmctextoutputs.txt"
-$dirwithfiles = "c:\temp\youroutdir\"
-$nl =[System.Environment]::Newline
-Get-ChildItem $dirwithfiles | % {
-  $data = $null
-  $data = "$_" + $nl
-  $pdf = $null
-  $pdf = Import-PDFText -Path $_
-  $data = $data + $pdf + $nl
-  Add-Content $outputfile $data
-}
-
-#>
-
-<#
-After this you process the text outputs within SQL server
-BULK INSERT as one lines with row delimiter '\n' and unpcik from there
-
-#>
