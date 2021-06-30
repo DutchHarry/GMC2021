@@ -15,20 +15,20 @@ $a = invoke-webrequest $url -OutFile "$outputdir$line.PDF" -UserAgent "$useragen
 
 Getting the GMC numbers
 Potentially there are about 5,500,000 valid GMC numbers
-The tange from 0 to 5,000,000 exists of only 500k numbers with an additional checkdigit
-Only the about 500,000 numbers with valid checkdigit were scanned.
-The 5m and 6m ranges were in the past used for other puposes but contain some existing numbers.
+The range from 0 to 5,000,000 exists of only 500k numbers with an additional check digit
+Only the about 500,000 numbers with valid check digit were scanned.
+The 5m and 6m ranges were in the past used for other purposes but contain some existing numbers.
 Only 5,500,000 to 5,900,000 and 6,500,000 to 6,900,000 weren't scanned (yet).
 Between 8,020,000 and 9,999,999 none were scanned either.
 
 All other numbers were scanned.
-But surely a few were missed (maybe temprarily offline?)
+But surely a few were missed (maybe temporarily offline?)
 
-The result bearly 450k PDFs with GMC details
+The result nearly 450k PDFs with GMC details
 
 Transforming to text files
 Tried a few with an Adobe Acrobat kit, with unsatisfactory results.
-Tried with itextsharp (and poweshell) with better results
+Tried with itextsharp (and powershell) with better results
 But finally went for processing with pdftotext (from xpdfreader)
 
 # options -table and -raw aren't that good, so wh these options and within Poweshlell
@@ -75,3 +75,15 @@ Get-ChildItem "$indir\*.PDF" | % { `
 #  Write-Host "$_"
 }
 
+
+Replace OCR-errors
+Ended up with creating a table with search en replace items to correct the OCR-errors due to the extreme low resolutiond PDF images.
+After that replace the repeated spaces so ended up with lines that reflect the horizontal zones of the PDF file.
+After that it's just a reasonably structured form that we can dissect with normal T-SQL.
+
+Wy all this effort?
+GMC tells you can buy a file with about 300k+ doctors, whereas we find 450k+.
+And we find that a few doctors disappear over the years, not as a result of dying, or retiring, as these doctors are still in the records, but individuals who had serious issues. We can assume they used their 'right to be forgotten', so they can reappear elsewhere in the world and continue malpracticing.
+
+And of course it was a nice challenge trying automating the processing of extremely fuzzy data.
+After all there are more exampls of this, e.g. scanned receipts, or invoices.
